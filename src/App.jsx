@@ -268,22 +268,38 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Nanum+Myeongjo:wght@400;700;800&display=swap');
         @media print {
-          body { background: white !important; }
+          html, body {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
           .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          @page {
+            margin: 0.8cm;
+            size: A4 portrait;
+          }
           .print-page {
             box-shadow: none !important;
             border: none !important;
             padding: 0 !important;
             margin: 0 !important;
-            page-break-inside: avoid;
-            break-inside: avoid;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            page-break-after: always !important;
+            break-after: page !important;
           }
-          .print-page + .print-page {
-            page-break-before: always;
-            break-before: page;
+          .print-page:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
           }
-          .print-only { display: block !important; }
-          @page { margin: 1.2cm; size: A4; }
+          .test-items-grid,
+          .test-item {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
         }
         .print-only { display: none; }
         .test-line { border-bottom: 1px solid #1c1917; min-height: 1.3rem; }
@@ -832,24 +848,33 @@ function TestPaper({
       {pages.map((pageItems, pageIdx) => {
         const startNum = pageIdx * ITEMS_PER_PAGE + 1;
         const isFirstPage = pageIdx === 0;
-        const isLastPage = pageIdx === pages.length - 1;
 
         return (
           <div
             key={pageIdx}
             className={`print-page bg-white ${
-              isPrint ? 'p-10' : 'shadow-lg p-10 rounded-lg'
+              isPrint ? '' : 'shadow-lg rounded-lg'
             }`}
             style={{
-              pageBreakAfter: isLastPage ? 'auto' : 'always',
-              breakAfter: isLastPage ? 'auto' : 'page',
+              padding: isPrint ? '0' : '2rem',
+              // A4 사이즈: 21cm × 29.7cm, 여백 0.8cm씩 적용 시 사용 가능 영역
+              // 미리보기에서는 A4 비율을 보여주고, 인쇄는 CSS @page가 처리
+              ...(isPrint
+                ? { width: '100%', boxSizing: 'border-box' }
+                : {
+                    width: '19.4cm',
+                    minHeight: '28.1cm',
+                    maxHeight: '28.1cm',
+                    overflow: 'hidden',
+                    padding: '0.8cm',
+                  }),
             }}
           >
-            {/* 페이지 헤더 */}
-            <div className="border-b-2 border-stone-900 pb-3 mb-4">
+            {/* 페이지 헤더 - 컴팩트 */}
+            <div className="border-b-2 border-stone-900 pb-2 mb-3">
               <div className="flex justify-between items-start gap-4">
-                <div>
-                  <div className="text-[10px] text-stone-500 mb-0.5">
+                <div className="flex-1">
+                  <div className="text-[9px] text-stone-500 mb-0.5">
                     VOCABULARY TEST
                     {pages.length > 1 && (
                       <span className="ml-2">
@@ -858,70 +883,73 @@ function TestPaper({
                     )}
                   </div>
                   <h1
-                    className="text-xl font-black text-stone-900"
+                    className="text-lg font-black text-stone-900 leading-tight"
                     style={{ fontFamily: "'Nanum Myeongjo', serif" }}
                   >
                     {testTitle || `어휘 시험 (${selectedRangeLabel})`}
                   </h1>
                   {isFirstPage && (
-                    <div className="text-xs text-stone-600 mt-1">
+                    <div className="text-[11px] text-stone-600 mt-0.5">
                       {isEngKor
                         ? '※ 다음 영어 단어의 우리말 뜻을 쓰시오.'
                         : '※ 다음 우리말에 해당하는 영어 단어를 쓰시오.'}
                     </div>
                   )}
                   {!isFirstPage && (
-                    <div className="text-xs text-stone-500 mt-1">(이어서)</div>
+                    <div className="text-[10px] text-stone-500 mt-0.5">(이어서)</div>
                   )}
                 </div>
-                <div className="text-[11px] text-stone-700 border border-stone-300 rounded p-2 min-w-[160px]">
+                <div className="text-[10px] text-stone-700 border border-stone-300 rounded p-1.5 min-w-[140px]">
                   {academyName && (
-                    <div className="pb-1 border-b border-stone-200 mb-1">
-                      <span className="text-stone-500 mr-1.5">학원</span>
+                    <div className="pb-0.5 border-b border-stone-200 mb-0.5">
+                      <span className="text-stone-500 mr-1">학원</span>
                       {academyName}
                     </div>
                   )}
                   {className && (
-                    <div className="pb-1 border-b border-stone-200 mb-1">
-                      <span className="text-stone-500 mr-1.5">단원</span>
-                      {className}
+                    <div className="pb-0.5 border-b border-stone-200 mb-0.5">
+                      <span className="text-stone-500 mr-1">단원</span>
+                      <span className="text-[9px]">{className}</span>
                     </div>
                   )}
                   <div>
-                    <span className="text-stone-500 mr-1.5">이름</span>
-                    {studentName || '________________'}
+                    <span className="text-stone-500 mr-1">이름</span>
+                    {studentName || '_____________'}
                   </div>
                 </div>
               </div>
-              <div className="flex justify-between items-center mt-2 text-[10px] text-stone-500">
+              <div className="flex justify-between items-center mt-1 text-[9px] text-stone-500">
                 <span>
-                  총 {test.items.length}문항 · 출제 유형:{' '}
-                  {isEngKor ? '영어→한글' : '한글→영어'}
+                  총 {test.items.length}문항 · {isEngKor ? '영어→한글' : '한글→영어'}
                 </span>
                 {isFirstPage && <span>점수:        / {test.items.length}</span>}
               </div>
             </div>
 
             {/* 문항 영역 - 2단 × 20행 = 40문항 */}
-            <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
+            <div className="test-items-grid grid grid-cols-2 gap-x-6 gap-y-0">
               {pageItems.map((item, i) => {
                 const question = isEngKor ? item.eng : item.kor;
                 const answer = isEngKor ? item.kor : item.eng;
                 const num = startNum + i;
                 return (
-                  <div key={i} className="flex items-baseline gap-2 py-1">
-                    <span className="font-bold text-stone-700 w-7 text-right text-[13px]">
+                  <div
+                    key={i}
+                    className="test-item flex items-baseline gap-1.5"
+                    style={{ paddingTop: '4px', paddingBottom: '4px' }}
+                  >
+                    <span className="font-bold text-stone-700 w-6 text-right text-[12px] flex-shrink-0">
                       {num}.
                     </span>
-                    <div className="flex-1">
-                      <div className="font-medium text-stone-900 text-[13px] leading-tight">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-stone-900 text-[12px] leading-tight truncate">
                         {question}
                       </div>
                       <div
-                        className={`test-line mt-0.5 text-[12px] ${
+                        className={`test-line text-[11px] ${
                           showAnswers ? 'text-red-600 font-medium' : ''
                         }`}
-                        style={{ minHeight: '1.3rem' }}
+                        style={{ minHeight: '1.1rem', marginTop: '2px' }}
                       >
                         {showAnswers ? answer : '\u00A0'}
                       </div>
@@ -931,8 +959,8 @@ function TestPaper({
               })}
             </div>
 
-            {/* 페이지 푸터 */}
-            <div className="mt-6 pt-2 border-t border-stone-200 text-[9px] text-stone-400 flex justify-between">
+            {/* 페이지 푸터 - 컴팩트 */}
+            <div className="mt-3 pt-1 border-t border-stone-200 text-[8px] text-stone-400 flex justify-between">
               <span>GIANTS 어휘 출제기</span>
               <span>
                 {pageIdx + 1} / {pages.length} ·{' '}
