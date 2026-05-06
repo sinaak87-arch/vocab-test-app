@@ -31,11 +31,30 @@ function sanitizeForFilename(s) {
 }
 
 // 단원 배열을 정렬 (숫자 우선, 없으면 문자열 비교)
+// 단원 값에서 숫자 부분 추출 (예: "Day 01" → 1, "단원 19" → 19, "19" → 19)
+function extractUnitNumber(unit) {
+  if (unit === null || unit === undefined) return null;
+  const str = String(unit).trim();
+  // 문자열에서 첫 번째 숫자 그룹 추출
+  const match = str.match(/(\d+(?:\.\d+)?)/);
+  if (match) {
+    const num = parseFloat(match[1]);
+    return isNaN(num) ? null : num;
+  }
+  return null;
+}
+
+// 단원 배열을 정렬 (숫자 부분 추출해서 정렬, 없으면 문자열 비교)
 function sortUnits(arr) {
   return [...arr].sort((a, b) => {
-    const na = parseFloat(a),
-      nb = parseFloat(b);
-    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    const na = extractUnitNumber(a);
+    const nb = extractUnitNumber(b);
+    // 둘 다 숫자가 있으면 숫자로 비교
+    if (na !== null && nb !== null) return na - nb;
+    // 한쪽만 숫자면 숫자가 앞으로
+    if (na !== null) return -1;
+    if (nb !== null) return 1;
+    // 둘 다 문자열이면 문자열 비교
     return String(a).localeCompare(String(b));
   });
 }
@@ -116,8 +135,10 @@ export default function App() {
           const eng = row[1];
           const kor = row[2];
           if (unit !== null && unit !== undefined && eng && kor) {
+            // 단원 값에서 모든 공백 문자(일반 공백, 탭, 줄바꿈, NBSP 등) 정규화
+            const cleanUnit = String(unit).replace(/\s+/g, ' ').trim();
             parsed.push({
-              unit: String(unit).trim(),
+              unit: cleanUnit,
               eng: String(eng).trim(),
               kor: String(kor).trim(),
             });
