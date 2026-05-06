@@ -361,19 +361,20 @@ export default function App() {
           .no-print { display: none !important; }
           .print-only { display: block !important; }
           @page {
-            margin: 1cm 0.7cm;
+            margin: 0.7cm 0.6cm;
             size: A4 portrait;
           }
-          /* 인쇄 시 시험지 페이지를 정확한 A4 사용 영역에 강제 고정
-             A4 = 21cm × 29.7cm, @page margin 1cm/0.7cm = 사용 영역 19.6cm × 27.7cm */
+          /* 인쇄 시 시험지 페이지를 A4 사용 영역에 안전하게 고정
+             A4 = 21cm × 29.7cm, @page margin 0.7cm/0.6cm = 사용 영역 19.8cm × 28.3cm
+             높이는 28.0cm로 살짝 여유를 둬서 빈 페이지가 추가되지 않도록 함 */
           .print-page {
             box-shadow: none !important;
             border: none !important;
             margin: 0 !important;
             padding: 0 !important;
             width: 100% !important;
-            height: 27.7cm !important;
-            max-height: 27.7cm !important;
+            height: 28.0cm !important;
+            max-height: 28.0cm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             page-break-inside: avoid !important;
@@ -402,10 +403,10 @@ export default function App() {
             grid-auto-rows: 1fr !important;
             align-content: stretch !important;
           }
-          /* 인쇄 시 각 문항 패딩을 살짝 줄여 안전하게 40개 들어가도록 */
+          /* 인쇄 시 각 문항 패딩을 줄여 40개가 안전하게 한 페이지에 들어가도록 */
           .print-page .test-item {
-            padding-top: 3px !important;
-            padding-bottom: 3px !important;
+            padding-top: 2px !important;
+            padding-bottom: 2px !important;
           }
         }
         .print-only { display: none; }
@@ -990,9 +991,9 @@ function TestPaper({
                     flexDirection: 'column',
                   }
                 : {
-                    width: '19.6cm',
-                    height: '27.7cm',
-                    maxHeight: '27.7cm',
+                    width: '19.8cm',
+                    height: '28.0cm',
+                    maxHeight: '28.0cm',
                     overflow: 'hidden',
                     padding: '0',
                     boxSizing: 'border-box',
@@ -1075,8 +1076,8 @@ function TestPaper({
                     key={i}
                     className="test-item flex items-baseline gap-1.5"
                     style={{
-                      paddingTop: '6px',
-                      paddingBottom: '6px',
+                      paddingTop: '4px',
+                      paddingBottom: '4px',
                     }}
                   >
                     <span className="font-bold text-stone-700 w-6 text-right text-[12px] flex-shrink-0">
