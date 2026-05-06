@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 const STORAGE_KEY = 'vocab_test_maker_v4';
-const ACADEMY_NAME = 'Giants English';
+const ACADEMY_NAME = 'GIANTS';
 
 // 파일명에서 확장자 제거
 function getFileBaseName(filename) {
@@ -67,6 +67,7 @@ export default function App() {
   const [testTitle, setTestTitle] = useState('');
   const [fileName, setFileName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [previewZoom, setPreviewZoom] = useState(50); // 미리보기 화면 비율 (%)
 
   // 사용자가 직접 수정했는지 추적 (직접 수정한 경우 자동값 덮어쓰지 않음)
   const [classNameTouched, setClassNameTouched] = useState(false);
@@ -248,12 +249,23 @@ export default function App() {
         @media print {
           body { background: white !important; }
           .no-print { display: none !important; }
-          .print-page { box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
+          .print-page {
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          .print-page + .print-page {
+            page-break-before: always;
+            break-before: page;
+          }
           .print-only { display: block !important; }
-          @page { margin: 1.5cm; }
+          @page { margin: 1.2cm; size: A4; }
         }
         .print-only { display: none; }
-        .test-line { border-bottom: 1px solid #1c1917; min-height: 1.6rem; }
+        .test-line { border-bottom: 1px solid #1c1917; min-height: 1.3rem; }
       `}</style>
 
       <header className="no-print bg-gradient-to-r from-violet-700 via-purple-700 to-fuchsia-700 text-white">
@@ -267,7 +279,7 @@ export default function App() {
                 className="text-2xl font-black tracking-tight"
                 style={{ fontFamily: "'Nanum Myeongjo', serif" }}
               >
-                어휘 시험 출제기
+                GIANTS 어휘 출제기
               </h1>
               <p className="text-xs text-violet-100/80 mt-0.5">
                 엑셀 파일로 만드는 단어 시험지
@@ -509,6 +521,12 @@ export default function App() {
                   </div>
                   <p className="text-xs text-stone-500 mt-1.5">
                     최대 {availableWords.length}개까지 출제 가능
+                    {questionCount > 0 && (
+                      <span className="ml-2 text-violet-600 font-medium">
+                        · 예상 {Math.ceil(questionCount / 40)}페이지
+                        {questionCount > 40 && ` (페이지당 40문항)`}
+                      </span>
+                    )}
                   </p>
                 </div>
 
@@ -664,6 +682,55 @@ export default function App() {
               </div>
             </div>
 
+            {/* 줌 컨트롤 */}
+            <div className="bg-violet-50 px-6 py-2.5 border-b border-violet-100 flex items-center gap-3 flex-wrap">
+              <span className="text-xs font-bold text-violet-800">🔍 미리보기 크기</span>
+              <button
+                onClick={() => setPreviewZoom(Math.max(25, previewZoom - 5))}
+                className="w-7 h-7 rounded bg-white hover:bg-violet-100 text-sm font-bold border border-violet-200"
+                title="축소"
+              >
+                −
+              </button>
+              <input
+                type="range"
+                min="25"
+                max="100"
+                step="5"
+                value={previewZoom}
+                onChange={(e) => setPreviewZoom(parseInt(e.target.value))}
+                className="flex-1 max-w-xs accent-violet-600"
+              />
+              <button
+                onClick={() => setPreviewZoom(Math.min(100, previewZoom + 5))}
+                className="w-7 h-7 rounded bg-white hover:bg-violet-100 text-sm font-bold border border-violet-200"
+                title="확대"
+              >
+                +
+              </button>
+              <span className="text-sm font-bold text-violet-700 min-w-[3rem]">
+                {previewZoom}%
+              </span>
+              <div className="flex items-center gap-1 ml-2">
+                {[25, 40, 50, 70, 100].map((z) => (
+                  <button
+                    key={z}
+                    onClick={() => setPreviewZoom(z)}
+                    className={`px-2 py-0.5 text-xs rounded font-medium ${
+                      previewZoom === z
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-white hover:bg-violet-100 text-stone-700 border border-violet-200'
+                    }`}
+                  >
+                    {z === 100 ? '실제' : `${z}%`}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[10px] text-stone-500 ml-auto hidden md:inline">
+                ⓘ 인쇄/PDF는 항상 실제 A4 크기로 출력됩니다
+              </span>
+            </div>
+
             <div className="p-6 bg-stone-100">
               <div className="max-w-3xl mx-auto mb-3 text-xs text-stone-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2.5 flex items-start gap-2">
                 <Download className="w-4 h-4 text-rose-600 mt-0.5 flex-shrink-0" />
@@ -676,15 +743,25 @@ export default function App() {
                   으로 자동 입력됩니다.
                 </div>
               </div>
-              <TestPaper
-                test={generatedTest}
-                showAnswers={showAnswers}
-                academyName={ACADEMY_NAME}
-                className={className}
-                studentName={studentName}
-                testTitle={testTitle}
-                selectedRangeLabel={selectedRangeLabel}
-              />
+              {/* 줌 적용 래퍼 */}
+              <div
+                style={{
+                  transform: `scale(${previewZoom / 100})`,
+                  transformOrigin: 'top center',
+                  width: `${10000 / previewZoom}%`,
+                  marginLeft: `${-(10000 / previewZoom - 100) / 2}%`,
+                }}
+              >
+                <TestPaper
+                  test={generatedTest}
+                  showAnswers={showAnswers}
+                  academyName={ACADEMY_NAME}
+                  className={className}
+                  studentName={studentName}
+                  testTitle={testTitle}
+                  selectedRangeLabel={selectedRangeLabel}
+                />
+              </div>
             </div>
           </section>
         )}
@@ -728,82 +805,132 @@ function TestPaper({
   isPrint,
 }) {
   const isEngKor = test.type === 'eng-kor';
+  const ITEMS_PER_PAGE = 40; // 한 페이지당 문항 수 (2단 × 20행)
+
+  // 문항을 페이지 단위로 분할
+  const pages = [];
+  for (let i = 0; i < test.items.length; i += ITEMS_PER_PAGE) {
+    pages.push(test.items.slice(i, i + ITEMS_PER_PAGE));
+  }
 
   return (
     <div
-      className={`print-page bg-white ${
-        isPrint ? 'p-10' : 'mx-auto max-w-3xl shadow-lg p-10 rounded-lg'
-      }`}
+      className={isPrint ? '' : 'mx-auto max-w-3xl space-y-6'}
       style={{ fontFamily: "'Noto Sans KR', sans-serif" }}
     >
-      <div className="border-b-2 border-stone-900 pb-3 mb-5">
-        <div className="flex justify-between items-start gap-4">
-          <div>
-            <div className="text-xs text-stone-500 mb-0.5">VOCABULARY TEST</div>
-            <h1
-              className="text-2xl font-black text-stone-900"
-              style={{ fontFamily: "'Nanum Myeongjo', serif" }}
-            >
-              {testTitle || `어휘 시험 (${selectedRangeLabel})`}
-            </h1>
-            <div className="text-sm text-stone-600 mt-1">
-              {isEngKor
-                ? '※ 다음 영어 단어의 우리말 뜻을 쓰시오.'
-                : '※ 다음 우리말에 해당하는 영어 단어를 쓰시오.'}
-            </div>
-          </div>
-          <div className="text-xs text-stone-700 border border-stone-300 rounded p-2 min-w-[160px]">
-            {academyName && (
-              <div className="pb-1 border-b border-stone-200 mb-1">
-                <span className="text-stone-500 mr-1.5">학원</span>
-                {academyName}
-              </div>
-            )}
-            {className && (
-              <div className="pb-1 border-b border-stone-200 mb-1">
-                <span className="text-stone-500 mr-1.5">단원</span>
-                {className}
-              </div>
-            )}
-            <div>
-              <span className="text-stone-500 mr-1.5">이름</span>
-              {studentName || '________________'}
-            </div>
-          </div>
-        </div>
-        <div className="flex justify-between items-center mt-2 text-[11px] text-stone-500">
-          <span>
-            총 {test.items.length}문항 · 출제 유형: {isEngKor ? '영어→한글' : '한글→영어'}
-          </span>
-          <span>점수:        / {test.items.length}</span>
-        </div>
-      </div>
+      {pages.map((pageItems, pageIdx) => {
+        const startNum = pageIdx * ITEMS_PER_PAGE + 1;
+        const isFirstPage = pageIdx === 0;
+        const isLastPage = pageIdx === pages.length - 1;
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-        {test.items.map((item, i) => {
-          const question = isEngKor ? item.eng : item.kor;
-          const answer = isEngKor ? item.kor : item.eng;
-          return (
-            <div key={i} className="flex items-baseline gap-2 py-1.5">
-              <span className="font-bold text-stone-700 w-7 text-right">{i + 1}.</span>
-              <div className="flex-1">
-                <div className="font-medium text-stone-900 text-[15px]">{question}</div>
-                <div
-                  className={`test-line mt-1 ${
-                    showAnswers ? 'text-red-600 font-medium' : ''
-                  }`}
-                >
-                  {showAnswers ? answer : '\u00A0'}
+        return (
+          <div
+            key={pageIdx}
+            className={`print-page bg-white ${
+              isPrint ? 'p-10' : 'shadow-lg p-10 rounded-lg'
+            }`}
+            style={{
+              pageBreakAfter: isLastPage ? 'auto' : 'always',
+              breakAfter: isLastPage ? 'auto' : 'page',
+            }}
+          >
+            {/* 페이지 헤더 */}
+            <div className="border-b-2 border-stone-900 pb-3 mb-4">
+              <div className="flex justify-between items-start gap-4">
+                <div>
+                  <div className="text-[10px] text-stone-500 mb-0.5">
+                    VOCABULARY TEST
+                    {pages.length > 1 && (
+                      <span className="ml-2">
+                        · Page {pageIdx + 1} / {pages.length}
+                      </span>
+                    )}
+                  </div>
+                  <h1
+                    className="text-xl font-black text-stone-900"
+                    style={{ fontFamily: "'Nanum Myeongjo', serif" }}
+                  >
+                    {testTitle || `어휘 시험 (${selectedRangeLabel})`}
+                  </h1>
+                  {isFirstPage && (
+                    <div className="text-xs text-stone-600 mt-1">
+                      {isEngKor
+                        ? '※ 다음 영어 단어의 우리말 뜻을 쓰시오.'
+                        : '※ 다음 우리말에 해당하는 영어 단어를 쓰시오.'}
+                    </div>
+                  )}
+                  {!isFirstPage && (
+                    <div className="text-xs text-stone-500 mt-1">(이어서)</div>
+                  )}
+                </div>
+                <div className="text-[11px] text-stone-700 border border-stone-300 rounded p-2 min-w-[160px]">
+                  {academyName && (
+                    <div className="pb-1 border-b border-stone-200 mb-1">
+                      <span className="text-stone-500 mr-1.5">학원</span>
+                      {academyName}
+                    </div>
+                  )}
+                  {className && (
+                    <div className="pb-1 border-b border-stone-200 mb-1">
+                      <span className="text-stone-500 mr-1.5">단원</span>
+                      {className}
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-stone-500 mr-1.5">이름</span>
+                    {studentName || '________________'}
+                  </div>
                 </div>
               </div>
+              <div className="flex justify-between items-center mt-2 text-[10px] text-stone-500">
+                <span>
+                  총 {test.items.length}문항 · 출제 유형:{' '}
+                  {isEngKor ? '영어→한글' : '한글→영어'}
+                </span>
+                {isFirstPage && <span>점수:        / {test.items.length}</span>}
+              </div>
             </div>
-          );
-        })}
-      </div>
 
-      <div className="mt-8 pt-3 border-t border-stone-200 text-[10px] text-stone-400 text-center">
-        Generated by 어휘 시험 출제기 · {test.createdAt.toLocaleDateString('ko-KR')}
-      </div>
+            {/* 문항 영역 - 2단 × 20행 = 40문항 */}
+            <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
+              {pageItems.map((item, i) => {
+                const question = isEngKor ? item.eng : item.kor;
+                const answer = isEngKor ? item.kor : item.eng;
+                const num = startNum + i;
+                return (
+                  <div key={i} className="flex items-baseline gap-2 py-1">
+                    <span className="font-bold text-stone-700 w-7 text-right text-[13px]">
+                      {num}.
+                    </span>
+                    <div className="flex-1">
+                      <div className="font-medium text-stone-900 text-[13px] leading-tight">
+                        {question}
+                      </div>
+                      <div
+                        className={`test-line mt-0.5 text-[12px] ${
+                          showAnswers ? 'text-red-600 font-medium' : ''
+                        }`}
+                        style={{ minHeight: '1.3rem' }}
+                      >
+                        {showAnswers ? answer : '\u00A0'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 페이지 푸터 */}
+            <div className="mt-6 pt-2 border-t border-stone-200 text-[9px] text-stone-400 flex justify-between">
+              <span>GIANTS 어휘 출제기</span>
+              <span>
+                {pageIdx + 1} / {pages.length} ·{' '}
+                {test.createdAt.toLocaleDateString('ko-KR')}
+              </span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
