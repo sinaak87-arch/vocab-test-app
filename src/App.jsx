@@ -361,7 +361,7 @@ export default function App() {
           .no-print { display: none !important; }
           .print-only { display: block !important; }
           @page {
-            margin: 0.5cm;
+            margin: 0.7cm;
             size: A4 portrait;
           }
           /* 인쇄 시 시험지 페이지를 정확한 A4 사용 영역에 강제 고정 */
@@ -371,8 +371,8 @@ export default function App() {
             margin: 0 !important;
             padding: 0 !important;
             width: 100% !important;
-            height: 27.7cm !important;
-            max-height: 27.7cm !important;
+            height: 27cm !important;
+            max-height: 27cm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             page-break-inside: avoid !important;
@@ -973,8 +973,8 @@ function TestPaper({
               isPrint ? '' : 'shadow-lg rounded-lg'
             }`}
             style={{
-              // A4 = 21cm × 29.7cm, @page margin 0.5cm 적용 시 사용 영역 = 20cm × 28.7cm
-              // 미리보기와 인쇄 모두 동일한 영역 사용 (페이지 내부 패딩 0.5cm 추가)
+              // A4 = 21cm × 29.7cm, @page margin 0.7cm 적용 시 사용 영역 = 19.6cm × 28.3cm
+              // 미리보기와 인쇄 모두 동일한 영역 사용 (안전 여백 포함)
               ...(isPrint
                 ? {
                     width: '100%',
@@ -984,9 +984,9 @@ function TestPaper({
                     flexDirection: 'column',
                   }
                 : {
-                    width: '20cm',
-                    height: '28.7cm',
-                    maxHeight: '28.7cm',
+                    width: '19.6cm',
+                    height: '27cm',
+                    maxHeight: '27cm',
                     overflow: 'hidden',
                     padding: '0.5cm',
                     boxSizing: 'border-box',
