@@ -361,18 +361,19 @@ export default function App() {
           .no-print { display: none !important; }
           .print-only { display: block !important; }
           @page {
-            margin: 0.7cm;
+            margin: 1cm 0.7cm;
             size: A4 portrait;
           }
-          /* 인쇄 시 시험지 페이지를 정확한 A4 사용 영역에 강제 고정 */
+          /* 인쇄 시 시험지 페이지를 정확한 A4 사용 영역에 강제 고정
+             A4 = 21cm × 29.7cm, @page margin 1cm/0.7cm = 사용 영역 19.6cm × 27.7cm */
           .print-page {
             box-shadow: none !important;
             border: none !important;
             margin: 0 !important;
             padding: 0 !important;
             width: 100% !important;
-            height: 27cm !important;
-            max-height: 27cm !important;
+            height: 27.7cm !important;
+            max-height: 27.7cm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             page-break-inside: avoid !important;
@@ -400,6 +401,11 @@ export default function App() {
             flex: 1 1 auto !important;
             grid-auto-rows: 1fr !important;
             align-content: stretch !important;
+          }
+          /* 인쇄 시 각 문항 패딩을 살짝 줄여 안전하게 40개 들어가도록 */
+          .print-page .test-item {
+            padding-top: 3px !important;
+            padding-bottom: 3px !important;
           }
         }
         .print-only { display: none; }
@@ -973,8 +979,8 @@ function TestPaper({
               isPrint ? '' : 'shadow-lg rounded-lg'
             }`}
             style={{
-              // A4 = 21cm × 29.7cm, @page margin 0.7cm 적용 시 사용 영역 = 19.6cm × 28.3cm
-              // 미리보기와 인쇄 모두 동일한 영역 사용 (안전 여백 포함)
+              // A4 = 21cm × 29.7cm, @page margin 1cm/0.7cm 적용 시 사용 영역 = 19.6cm × 27.7cm
+              // 미리보기와 인쇄 모두 동일한 영역 사용
               ...(isPrint
                 ? {
                     width: '100%',
@@ -985,10 +991,10 @@ function TestPaper({
                   }
                 : {
                     width: '19.6cm',
-                    height: '27cm',
-                    maxHeight: '27cm',
+                    height: '27.7cm',
+                    maxHeight: '27.7cm',
                     overflow: 'hidden',
-                    padding: '0.5cm',
+                    padding: '0',
                     boxSizing: 'border-box',
                     display: 'flex',
                     flexDirection: 'column',
