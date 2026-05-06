@@ -13,6 +13,8 @@ import {
   Sparkles,
   Layers,
   Download,
+  RefreshCw,
+  FileUp,
 } from 'lucide-react';
 
 const STORAGE_KEY = 'vocab_test_maker_v4';
@@ -263,6 +265,54 @@ export default function App() {
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     setGeneratedTest({ ...generatedTest, items: arr });
+  };
+
+  // 시험지만 지우고 STEP 02로 돌아가기 (파일/단원 선택 유지)
+  const handleResetTest = () => {
+    setGeneratedTest(null);
+    setShowAnswers(false);
+    // STEP 02 영역으로 부드럽게 스크롤
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
+  };
+
+  // 새 파일로 완전 초기화 (모든 데이터 리셋)
+  const handleResetAll = () => {
+    const confirmReset = window.confirm(
+      '⚠️ 모든 설정을 초기화하고 처음부터 다시 시작합니다.\n\n' +
+      '· 업로드한 파일 정보가 사라집니다\n' +
+      '· 선택한 단원이 모두 해제됩니다\n' +
+      '· 만든 시험지가 사라집니다\n\n' +
+      '계속 진행하시겠습니까?'
+    );
+    if (!confirmReset) return;
+
+    setWords([]);
+    setUnits([]);
+    setSelectedUnits(new Set());
+    setQuestionCount(20);
+    setTestType('eng-kor');
+    setGeneratedTest(null);
+    setShowAnswers(false);
+    setClassName('');
+    setStudentName('');
+    setTestTitle('');
+    setFileName('');
+    setErrorMsg('');
+    setClassNameTouched(false);
+    setTestTitleTouched(false);
+    setLastClickedUnit(null);
+
+    // 파일 input 초기화 (같은 파일을 다시 선택할 수 있도록)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+
+    // 페이지 최상단으로 스크롤
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
   };
 
   const handlePrint = () => window.print();
@@ -767,6 +817,22 @@ export default function App() {
                   className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold flex items-center gap-1.5"
                 >
                   <Printer className="w-4 h-4" /> 인쇄하기
+                </button>
+                {/* 구분선 */}
+                <span className="hidden sm:inline-block w-px h-6 bg-stone-300 mx-1"></span>
+                <button
+                  onClick={handleResetTest}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-stone-200 hover:border-violet-300 hover:bg-violet-50 text-sm font-medium flex items-center gap-1.5"
+                  title="시험지를 지우고 STEP 02로 돌아가서 다른 조건으로 다시 만들기"
+                >
+                  <RefreshCw className="w-4 h-4" /> 다시 만들기
+                </button>
+                <button
+                  onClick={handleResetAll}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-stone-200 hover:border-blue-300 hover:bg-blue-50 text-sm font-medium flex items-center gap-1.5 text-blue-700"
+                  title="모든 설정을 초기화하고 새 엑셀 파일로 시작하기"
+                >
+                  <FileUp className="w-4 h-4" /> 새 파일
                 </button>
               </div>
             </div>
