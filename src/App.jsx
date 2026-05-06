@@ -1,6 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
-  Link2,
+  Upload,
+  FileSpreadsheet,
   Printer,
   Eye,
   EyeOff,
@@ -9,58 +11,42 @@ import {
   Check,
   AlertCircle,
   Sparkles,
-  RefreshCw,
-  Loader2,
+  Layers,
 } from 'lucide-react';
 
-// 구글 시트 URL을 CSV export URL로 변환
-function convertToCsvUrl(url) {
-  // 형식: https://docs.google.com/spreadsheets/d/{ID}/edit?...
-  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (!match) return null;
-  const sheetId = match[1];
-  // gid 추출 (특정 시트 탭)
-  const gidMatch = url.match(/[#&?]gid=(\d+)/);
-  const gid = gidMatch ? gidMatch[1] : '0';
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+const STORAGE_KEY = 'vocab_test_maker_v3';
+
+// 파일명에서 확장자 제거
+function getFileBaseName(filename) {
+  if (!filename) return '';
+  return filename.replace(/\.(xlsx|xls|csv)$/i, '').trim();
 }
 
-// CSV 파싱 (간단한 따옴표 처리 포함)
-function parseCSV(text) {
-  const rows = [];
-  const lines = text.split(/\r?\n/);
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    const cells = [];
-    let cur = '';
-    let inQuote = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuote && line[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else {
-          inQuote = !inQuote;
-        }
-      } else if (ch === ',' && !inQuote) {
-        cells.push(cur);
-        cur = '';
-      } else {
-        cur += ch;
-      }
-    }
-    cells.push(cur);
-    rows.push(cells);
+// 단원 배열을 정렬 (숫자 우선, 없으면 문자열 비교)
+function sortUnits(arr) {
+  return [...arr].sort((a, b) => {
+    const na = parseFloat(a),
+      nb = parseFloat(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return String(a).localeCompare(String(b));
+  });
+}
+
+// 선택된 단원으로부터 시험지명 자동 생성
+function buildTestTitleFromUnits(selected, allUnits) {
+  if (!selected || selected.size === 0) return '';
+  const sorted = sortUnits([...selected]);
+  if (sorted.length === 1) return `${sorted[0]}`;
+
+  // 모든 단원이 선택됐을 때
+  if (sorted.length === allUnits.length) {
+    return `${sorted[0]}~${sorted[sorted.length - 1]} (전체)`;
   }
-  return rows;
-}
 
-const STORAGE_KEY = 'vocab_test_maker_state';
+  return `${sorted[0]}~${sorted[sorted.length - 1]}`;
+}
 
 export default function App() {
-  const [sheetUrl, setSheetUrl] = useState('');
-  const [loading, setLoading] = useState(false);
   const [words, setWords] = useState([]);
   const [units, setUnits] = useState([]);
   const [selectedUnits, setSelectedUnits] = useState(new Set());
@@ -72,107 +58,99 @@ export default function App() {
   const [className, setClassName] = useState('');
   const [studentName, setStudentName] = useState('');
   const [testTitle, setTestTitle] = useState('');
+  const [fileName, setFileName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [loadedSheetTitle, setLoadedSheetTitle] = useState('');
 
-  // 페이지 로드 시 저장된 상태 복원
+  // 사용자가 직접 수정했는지 추적 (직접 수정한 경우 자동값 덮어쓰지 않음)
+  const [classNameTouched, setClassNameTouched] = useState(false);
+  const [testTitleTouched, setTestTitleTouched] = useState(false);
+
+  const fileInputRef = useRef(null);
+
+  // 학원/클래스 정보 자동 저장/복원 (학원명만 영구 저장)
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const data = JSON.parse(saved);
-        if (data.sheetUrl) setSheetUrl(data.sheetUrl);
         if (data.academyName) setAcademyName(data.academyName);
-        if (data.className) setClassName(data.className);
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   }, []);
 
-  // 학원/클래스 정보 자동 저장
   useEffect(() => {
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ sheetUrl, academyName, className })
-      );
-    } catch (e) {
-      // ignore
-    }
-  }, [sheetUrl, academyName, className]);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ academyName }));
+    } catch (e) {}
+  }, [academyName]);
 
-  // 구글 시트에서 단어 불러오기
-  const loadFromSheet = async () => {
+  // 선택된 단원이 바뀔 때마다 시험지명 자동 업데이트 (사용자가 수정 안 한 경우만)
+  useEffect(() => {
+    if (testTitleTouched) return;
+    if (units.length === 0) {
+      setTestTitle('');
+      return;
+    }
+    const auto = buildTestTitleFromUnits(selectedUnits, units);
+    setTestTitle(auto);
+  }, [selectedUnits, units, testTitleTouched]);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
     setErrorMsg('');
-    if (!sheetUrl.trim()) {
-      setErrorMsg('구글 스프레드시트 URL을 입력해주세요.');
-      return;
-    }
-    const csvUrl = convertToCsvUrl(sheetUrl.trim());
-    if (!csvUrl) {
-      setErrorMsg(
-        '올바른 구글 스프레드시트 URL이 아닙니다. (예: https://docs.google.com/spreadsheets/d/...)'
-      );
-      return;
+    setFileName(file.name);
+
+    // 클래스명을 파일명으로 자동 설정 (사용자가 수정한 적 없을 때만)
+    const baseName = getFileBaseName(file.name);
+    if (!classNameTouched) {
+      setClassName(baseName);
     }
 
-    setLoading(true);
-    try {
-      const response = await fetch(csvUrl);
-      if (!response.ok) {
-        if (response.status === 404 || response.status === 401 || response.status === 403) {
+    // 새 파일 업로드 시 시험지명 자동 갱신을 위해 touched 상태 리셋
+    setTestTitleTouched(false);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+        const parsed = [];
+        rows.forEach((row) => {
+          if (!row || row.length < 3) return;
+          const unit = row[0];
+          const eng = row[1];
+          const kor = row[2];
+          if (unit !== null && unit !== undefined && eng && kor) {
+            parsed.push({
+              unit: String(unit).trim(),
+              eng: String(eng).trim(),
+              kor: String(kor).trim(),
+            });
+          }
+        });
+
+        if (parsed.length === 0) {
           setErrorMsg(
-            '시트에 접근할 수 없습니다. [공유] → [링크가 있는 모든 사용자]로 설정했는지 확인해주세요.'
+            '엑셀 파일에서 단어를 찾을 수 없습니다. A열: 단원, B열: 영어, C열: 한글뜻 형식인지 확인해주세요.'
           );
-        } else {
-          setErrorMsg(`시트를 불러올 수 없습니다 (오류 ${response.status}).`);
+          return;
         }
-        setLoading(false);
-        return;
+
+        const uniqueUnits = sortUnits([...new Set(parsed.map((w) => w.unit))]);
+
+        setWords(parsed);
+        setUnits(uniqueUnits);
+        setSelectedUnits(new Set(uniqueUnits));
+        setGeneratedTest(null);
+      } catch (err) {
+        setErrorMsg('파일을 읽는 중 오류가 발생했습니다: ' + err.message);
       }
-      const text = await response.text();
-      const rows = parseCSV(text);
-
-      const parsed = [];
-      rows.forEach((row) => {
-        if (!row || row.length < 3) return;
-        const unit = row[0];
-        const eng = row[1];
-        const kor = row[2];
-        if (unit && eng && kor && unit.toString().trim() && eng.trim() && kor.trim()) {
-          parsed.push({
-            unit: unit.toString().trim(),
-            eng: eng.trim(),
-            kor: kor.trim(),
-          });
-        }
-      });
-
-      if (parsed.length === 0) {
-        setErrorMsg(
-          '시트에서 단어를 찾을 수 없습니다. A열: 단원, B열: 영어, C열: 한글뜻 형식인지 확인해주세요.'
-        );
-        setLoading(false);
-        return;
-      }
-
-      const uniqueUnits = [...new Set(parsed.map((w) => w.unit))].sort((a, b) => {
-        const na = parseFloat(a),
-          nb = parseFloat(b);
-        if (!isNaN(na) && !isNaN(nb)) return na - nb;
-        return a.localeCompare(b);
-      });
-
-      setWords(parsed);
-      setUnits(uniqueUnits);
-      setSelectedUnits(new Set(uniqueUnits));
-      setGeneratedTest(null);
-      setLoadedSheetTitle(`${parsed.length}개 단어 · ${uniqueUnits.length}개 단원`);
-    } catch (err) {
-      setErrorMsg('네트워크 오류가 발생했습니다: ' + err.message);
-    }
-    setLoading(false);
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   const toggleUnit = (unit) => {
@@ -191,10 +169,19 @@ export default function App() {
     return words.filter((w) => selectedUnits.has(w.unit));
   }, [words, selectedUnits]);
 
+  // 단원별 단어 수
+  const unitCounts = useMemo(() => {
+    const map = {};
+    units.forEach((u) => {
+      map[u] = words.filter((w) => w.unit === u).length;
+    });
+    return map;
+  }, [words, units]);
+
   const generateTest = () => {
     setErrorMsg('');
     if (words.length === 0) {
-      setErrorMsg('먼저 구글 시트에서 단어를 불러와주세요.');
+      setErrorMsg('먼저 엑셀 파일을 업로드해주세요.');
       return;
     }
     if (selectedUnits.size === 0) {
@@ -217,7 +204,6 @@ export default function App() {
       createdAt: new Date(),
     });
     setShowAnswers(false);
-    // 시험지 영역으로 스크롤
     setTimeout(() => {
       document
         .getElementById('test-preview')
@@ -240,12 +226,7 @@ export default function App() {
   const selectedRangeLabel = useMemo(() => {
     if (selectedUnits.size === 0) return '범위 미선택';
     if (selectedUnits.size === units.length) return '전체 단원';
-    const sorted = [...selectedUnits].sort((a, b) => {
-      const na = parseFloat(a),
-        nb = parseFloat(b);
-      if (!isNaN(na) && !isNaN(nb)) return na - nb;
-      return a.localeCompare(b);
-    });
+    const sorted = sortUnits([...selectedUnits]);
     if (sorted.length <= 4) return sorted.map((u) => `${u}`).join(', ');
     return `${sorted[0]} 외 ${sorted.length - 1}개 단원`;
   }, [selectedUnits, units]);
@@ -279,116 +260,140 @@ export default function App() {
                 어휘 시험 출제기
               </h1>
               <p className="text-xs text-violet-100/80 mt-0.5">
-                구글 스프레드시트로 만드는 단어 시험지
+                엑셀 파일로 만드는 단어 시험지
               </p>
             </div>
           </div>
           {words.length > 0 && (
             <div className="hidden md:flex items-center gap-2 text-xs bg-white/10 px-3 py-1.5 rounded-full">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{loadedSheetTitle}</span>
+              <span>
+                {words.length}개 단어 · {units.length}개 단원
+              </span>
             </div>
           )}
         </div>
       </header>
 
       <main className="no-print max-w-6xl mx-auto px-6 py-8 space-y-6">
-        {/* STEP 01 - 구글 시트 URL 입력 */}
+        {/* STEP 01 - 엑셀 업로드 */}
         <section className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
           <div className="bg-gradient-to-r from-amber-50 to-orange-50 px-6 py-3 border-b border-stone-200 flex items-center gap-3">
             <span className="bg-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded">
               STEP 01
             </span>
-            <h2 className="font-bold text-stone-800">구글 스프레드시트 연결</h2>
+            <h2 className="font-bold text-stone-800">엑셀 파일 업로드</h2>
+            <span className="text-xs text-stone-500 ml-auto hidden sm:inline">
+              A열: 단원 · B열: 영어 · C열: 한글뜻
+            </span>
           </div>
           <div className="p-6">
-            <label className="text-sm font-bold text-stone-700 block mb-2">
-              📊 구글 시트 URL
-            </label>
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <Link2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                <input
-                  type="url"
-                  value={sheetUrl}
-                  onChange={(e) => setSheetUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && loadFromSheet()}
-                  placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-500"
-                />
-              </div>
-              <button
-                onClick={loadFromSheet}
-                disabled={loading}
-                className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-stone-300 text-white font-bold rounded-lg flex items-center gap-2 transition-all"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중
-                  </>
-                ) : words.length > 0 ? (
-                  <>
-                    <RefreshCw className="w-4 h-4" /> 새로고침
-                  </>
-                ) : (
-                  <>불러오기</>
-                )}
-              </button>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-stone-300 hover:border-violet-400 hover:bg-violet-50/40 rounded-xl p-8 text-center cursor-pointer transition-all"
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              {fileName ? (
+                <div className="flex items-center justify-center gap-3 text-stone-700">
+                  <FileSpreadsheet className="w-8 h-8 text-emerald-600" />
+                  <div className="text-left">
+                    <div className="font-bold text-emerald-700 flex items-center gap-1.5">
+                      <Check className="w-4 h-4" /> {fileName}
+                    </div>
+                    <div className="text-xs text-stone-500 mt-0.5">
+                      {words.length}개 단어 · {units.length}개 단원 · 클릭해서 다른 파일로 변경
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-10 h-10 mx-auto text-stone-400 mb-3" />
+                  <p className="font-bold text-stone-700">엑셀 파일을 클릭해서 업로드하세요</p>
+                  <p className="text-xs text-stone-500 mt-1">.xlsx 또는 .xls 형식 지원</p>
+                </>
+              )}
             </div>
 
-            {words.length > 0 && (
-              <div className="mt-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
-                <Check className="w-4 h-4 flex-shrink-0" />
-                <span className="font-bold">{loadedSheetTitle} 로드 완료</span>
-                <span className="text-xs text-emerald-600 ml-auto">
-                  시트 내용을 수정한 뒤에는 [새로고침]을 눌러주세요
-                </span>
-              </div>
-            )}
-
-            {errorMsg && !loading && (
+            {errorMsg && (
               <div className="mt-3 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <span>{errorMsg}</span>
               </div>
             )}
 
-            <details className="mt-4 text-xs text-stone-500">
-              <summary className="cursor-pointer font-medium hover:text-stone-700">
-                💡 시트 형식 안내 (클릭해서 펼치기)
-              </summary>
-              <div className="mt-3 bg-stone-50 rounded-lg p-4 space-y-2">
-                <p>
-                  <strong className="text-stone-700">시트 형식:</strong> 첫 행부터 바로 데이터
-                  입력 (헤더 행 없이)
-                </p>
-                <table className="text-xs border border-stone-200 mt-2">
-                  <thead className="bg-stone-100">
-                    <tr>
-                      <th className="px-3 py-1 border-r border-stone-200">A열 (단원)</th>
-                      <th className="px-3 py-1 border-r border-stone-200">B열 (영어)</th>
-                      <th className="px-3 py-1">C열 (한글뜻)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="px-3 py-1 border-t border-r border-stone-200">19</td>
-                      <td className="px-3 py-1 border-t border-r border-stone-200">damp</td>
-                      <td className="px-3 py-1 border-t border-stone-200">습기 찬</td>
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-1 border-t border-r border-stone-200">19</td>
-                      <td className="px-3 py-1 border-t border-r border-stone-200">thick</td>
-                      <td className="px-3 py-1 border-t border-stone-200">짙은</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <p className="pt-2">
-                  <strong className="text-stone-700">공유 설정:</strong> 시트 우측 상단 [공유] →
-                  "링크가 있는 모든 사용자" → "뷰어"로 변경
-                </p>
+            {/* 단원 정보 한눈에 보기 (업로드 후 표시) */}
+            {words.length > 0 && (
+              <div className="mt-4 bg-gradient-to-br from-violet-50 to-fuchsia-50 border border-violet-200 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Layers className="w-4 h-4 text-violet-700" />
+                  <h3 className="font-bold text-violet-900 text-sm">
+                    이 파일의 단원 구성
+                  </h3>
+                  <span className="text-xs text-violet-700 ml-auto">
+                    범위: <strong>{units[0]} ~ {units[units.length - 1]}</strong> · 총 {units.length}개 단원
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {units.map((u) => (
+                    <div
+                      key={u}
+                      className="bg-white border border-violet-200 rounded-md px-2.5 py-1 text-xs flex items-center gap-1.5"
+                    >
+                      <span className="font-bold text-violet-900">{u}</span>
+                      <span className="text-stone-400">·</span>
+                      <span className="text-stone-600">{unitCounts[u]}개</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </details>
+            )}
+
+            {/* 시트 형식 안내 (접힌 상태) */}
+            {words.length === 0 && (
+              <details className="mt-4 text-xs text-stone-500">
+                <summary className="cursor-pointer font-medium hover:text-stone-700">
+                  💡 엑셀 형식 안내 (클릭해서 펼치기)
+                </summary>
+                <div className="mt-3 bg-stone-50 rounded-lg p-4 space-y-2">
+                  <p>
+                    <strong className="text-stone-700">파일 형식:</strong> 첫 행부터 바로 데이터
+                    입력 (헤더 행 없이)
+                  </p>
+                  <table className="text-xs border border-stone-200 mt-2">
+                    <thead className="bg-stone-100">
+                      <tr>
+                        <th className="px-3 py-1 border-r border-stone-200">A열 (단원)</th>
+                        <th className="px-3 py-1 border-r border-stone-200">B열 (영어)</th>
+                        <th className="px-3 py-1">C열 (한글뜻)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="px-3 py-1 border-t border-r border-stone-200">19</td>
+                        <td className="px-3 py-1 border-t border-r border-stone-200">damp</td>
+                        <td className="px-3 py-1 border-t border-stone-200">습기 찬</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-1 border-t border-r border-stone-200">19</td>
+                        <td className="px-3 py-1 border-t border-r border-stone-200">thick</td>
+                        <td className="px-3 py-1 border-t border-stone-200">짙은</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-1 border-t border-r border-stone-200">20</td>
+                        <td className="px-3 py-1 border-t border-r border-stone-200">improve</td>
+                        <td className="px-3 py-1 border-t border-stone-200">개선하다</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            )}
           </div>
         </section>
 
@@ -405,7 +410,9 @@ export default function App() {
             <div className="p-6 grid md:grid-cols-2 gap-6">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-sm font-bold text-stone-700">📚 시험 범위 (단원)</label>
+                  <label className="text-sm font-bold text-stone-700">
+                    📚 시험 범위 (단원)
+                  </label>
                   <button
                     onClick={toggleAllUnits}
                     className="text-xs text-violet-600 hover:text-violet-800 font-medium"
@@ -417,7 +424,7 @@ export default function App() {
                   <div className="grid grid-cols-3 gap-2">
                     {units.map((unit) => {
                       const checked = selectedUnits.has(unit);
-                      const cnt = words.filter((w) => w.unit === unit).length;
+                      const cnt = unitCounts[unit];
                       return (
                         <button
                           key={unit}
@@ -528,38 +535,71 @@ export default function App() {
             </div>
 
             <div className="bg-stone-50/60 px-6 py-5 border-t border-stone-100">
-              <label className="text-sm font-bold text-stone-700 block mb-3">
-                📝 시험지 정보 (선택)
-              </label>
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-sm font-bold text-stone-700">
+                  📝 시험지 정보
+                </label>
+                <span className="text-[11px] text-stone-500">
+                  ✨ 클래스명 = 파일명, 시험지명 = 단원 범위 자동 입력
+                </span>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <input
-                  type="text"
-                  value={academyName}
-                  onChange={(e) => setAcademyName(e.target.value)}
-                  placeholder="학원명"
-                  className="px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
-                />
-                <input
-                  type="text"
-                  value={className}
-                  onChange={(e) => setClassName(e.target.value)}
-                  placeholder="클래스명"
-                  className="px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
-                />
-                <input
-                  type="text"
-                  value={testTitle}
-                  onChange={(e) => setTestTitle(e.target.value)}
-                  placeholder="시험지명"
-                  className="px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
-                />
-                <input
-                  type="text"
-                  value={studentName}
-                  onChange={(e) => setStudentName(e.target.value)}
-                  placeholder="이름 (비워두면 빈칸)"
-                  className="px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
-                />
+                <div>
+                  <label className="text-[10px] text-stone-500 block mb-1">학원명</label>
+                  <input
+                    type="text"
+                    value={academyName}
+                    onChange={(e) => setAcademyName(e.target.value)}
+                    placeholder="학원명"
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-stone-500 block mb-1">
+                    클래스명{' '}
+                    {!classNameTouched && className && (
+                      <span className="text-violet-600">· 자동</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    value={className}
+                    onChange={(e) => {
+                      setClassName(e.target.value);
+                      setClassNameTouched(true);
+                    }}
+                    placeholder="클래스명"
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-stone-500 block mb-1">
+                    시험지명{' '}
+                    {!testTitleTouched && testTitle && (
+                      <span className="text-violet-600">· 자동</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    value={testTitle}
+                    onChange={(e) => {
+                      setTestTitle(e.target.value);
+                      setTestTitleTouched(true);
+                    }}
+                    placeholder="시험지명"
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-stone-500 block mb-1">학생 이름</label>
+                  <input
+                    type="text"
+                    value={studentName}
+                    onChange={(e) => setStudentName(e.target.value)}
+                    placeholder="비워두면 빈칸"
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
+                  />
+                </div>
               </div>
             </div>
 
@@ -623,11 +663,11 @@ export default function App() {
           </section>
         )}
 
-        {words.length === 0 && !loading && (
+        {words.length === 0 && (
           <div className="text-center py-12 text-stone-500 text-sm">
-            <p>👆 위에서 구글 시트 URL을 입력하고 [불러오기]를 누르면 시작할 수 있어요.</p>
+            <p>👆 위에서 엑셀 파일을 업로드하면 시작할 수 있어요.</p>
             <p className="mt-1 text-xs text-stone-400">
-              시트 형식: A열에 단원번호, B열에 영어 단어, C열에 한글 뜻
+              파일 형식: A열에 단원번호, B열에 영어 단어, C열에 한글 뜻
             </p>
           </div>
         )}
