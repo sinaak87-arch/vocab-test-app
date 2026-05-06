@@ -87,6 +87,7 @@ export default function App() {
   const [fileName, setFileName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [previewZoom, setPreviewZoom] = useState(50); // 미리보기 화면 비율 (%)
+  const [lastClickedUnit, setLastClickedUnit] = useState(null); // Shift 클릭 범위 선택용
 
   // 사용자가 직접 수정했는지 추적 (직접 수정한 경우 자동값 덮어쓰지 않음)
   const [classNameTouched, setClassNameTouched] = useState(false);
@@ -165,6 +166,37 @@ export default function App() {
     reader.readAsArrayBuffer(file);
   };
 
+  // 단원 클릭 처리 - Shift 클릭으로 범위 선택 지원
+  const handleUnitClick = (unit, event) => {
+    const shiftKey = event?.shiftKey;
+    const ctrlOrCmd = event?.ctrlKey || event?.metaKey;
+
+    // Shift + 클릭: 마지막 클릭 단원 ~ 현재 클릭 단원 사이 모두 선택
+    if (shiftKey && lastClickedUnit !== null && lastClickedUnit !== unit) {
+      const startIdx = units.indexOf(lastClickedUnit);
+      const endIdx = units.indexOf(unit);
+      if (startIdx === -1 || endIdx === -1) {
+        // 못 찾으면 일반 토글로 처리
+        toggleUnit(unit);
+        setLastClickedUnit(unit);
+        return;
+      }
+      const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+      const next = new Set(selectedUnits);
+      // 범위 안의 모든 단원을 선택 (해제하지 않고 추가)
+      for (let i = from; i <= to; i++) {
+        next.add(units[i]);
+      }
+      setSelectedUnits(next);
+      setLastClickedUnit(unit);
+      return;
+    }
+
+    // 일반 클릭 또는 Ctrl/Cmd + 클릭: 단일 토글
+    toggleUnit(unit);
+    setLastClickedUnit(unit);
+  };
+
   const toggleUnit = (unit) => {
     const next = new Set(selectedUnits);
     if (next.has(unit)) next.delete(unit);
@@ -240,25 +272,6 @@ export default function App() {
   const handleSaveAsPDF = () => {
     if (!generatedTest) return;
 
-    // 첫 사용 시 머리글/바닥글 해제 안내
-    const SHOWN_KEY = 'vocab_pdf_guide_shown';
-    const shown = localStorage.getItem(SHOWN_KEY);
-    if (!shown) {
-      const proceed = window.confirm(
-        '📄 PDF 저장 시 꼭 확인하세요!\n\n' +
-        '인쇄 대화상자가 열리면 다음을 꼭 설정하세요:\n\n' +
-        '1. 대상(프린터): "PDF로 저장" 선택\n' +
-        '2. ⚠️ "추가 설정" 또는 "옵션" 펼치기\n' +
-        '3. ⚠️ "머리글과 바닥글" 체크 해제 (필수!)\n' +
-        '4. [저장] 클릭\n\n' +
-        '※ 머리글/바닥글이 켜져있으면 시험지가 잘립니다.\n' +
-        '※ 한 번 설정하면 다음부터는 자동으로 기억됩니다.\n\n' +
-        '준비되면 [확인]을 눌러주세요.'
-      );
-      if (!proceed) return;
-      localStorage.setItem(SHOWN_KEY, '1');
-    }
-
     const cls = sanitizeForFilename(className) || 'class';
     const range = sanitizeForFilename(testTitle) || 'range';
     const suffix = showAnswers ? '_정답' : '';
@@ -332,17 +345,19 @@ export default function App() {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
-          /* 인쇄 시 문항 영역 매우 컴팩트 */
-          .print-page .test-item {
-            padding-top: 1px !important;
-            padding-bottom: 1px !important;
-          }
-          .print-page .test-line {
-            min-height: 0.85rem !important;
+          /* 인쇄 시 문항 영역이 페이지를 꽉 채우도록 grid 1fr이 작동하게 함 */
+          .print-page .test-items-grid {
+            flex: 1 1 auto !important;
+            grid-auto-rows: 1fr !important;
+            align-content: stretch !important;
           }
         }
         .print-only { display: none; }
         .test-line { border-bottom: 1px solid #1c1917; min-height: 1.1rem; }
+        kbd {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+        }
       `}</style>
 
       <header className="no-print bg-gradient-to-r from-violet-700 via-purple-700 to-fuchsia-700 text-white">
@@ -508,7 +523,7 @@ export default function App() {
 
             <div className="p-6 grid md:grid-cols-2 gap-6">
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <label className="text-sm font-bold text-stone-700">
                       📚 시험 범위
@@ -517,7 +532,7 @@ export default function App() {
                       <span className="inline-block w-3 h-3 bg-violet-600 rounded-sm"></span>
                       선택됨
                       <span className="inline-block w-3 h-3 bg-white border border-stone-300 rounded-sm ml-1.5"></span>
-                      미선택 · 클릭해서 선택하세요
+                      미선택
                     </span>
                   </div>
                   <button
@@ -527,6 +542,13 @@ export default function App() {
                     {selectedUnits.size === units.length ? '전체 해제' : '전체 선택'}
                   </button>
                 </div>
+                <div className="text-[11px] text-stone-500 mb-2 bg-violet-50 border border-violet-100 rounded px-2.5 py-1.5">
+                  💡 <kbd className="bg-white border border-stone-300 rounded px-1.5 py-0.5 text-[10px] font-mono mx-0.5">클릭</kbd> 단일 선택 ·
+                  <kbd className="bg-white border border-stone-300 rounded px-1.5 py-0.5 text-[10px] font-mono mx-0.5">Shift</kbd>
+                  <span className="mx-0.5">+</span>
+                  <kbd className="bg-white border border-stone-300 rounded px-1.5 py-0.5 text-[10px] font-mono mx-0.5">클릭</kbd>
+                  으로 시작~끝 범위 선택
+                </div>
                 <div className="border border-stone-200 rounded-xl p-3 max-h-60 overflow-y-auto bg-stone-50/50">
                   <div className="grid grid-cols-5 gap-2">
                     {units.map((unit) => {
@@ -535,7 +557,7 @@ export default function App() {
                       return (
                         <button
                           key={unit}
-                          onClick={() => toggleUnit(unit)}
+                          onClick={(e) => handleUnitClick(unit, e)}
                           className={`px-2 py-2 rounded-lg border text-sm font-medium transition-all ${
                             checked
                               ? 'bg-violet-600 border-violet-600 text-white shadow-sm'
@@ -799,34 +821,6 @@ export default function App() {
             </div>
 
             <div className="p-6 bg-stone-100">
-              <div className="max-w-3xl mx-auto mb-3 bg-rose-50 border-2 border-rose-300 rounded-lg px-4 py-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Download className="w-5 h-5 text-rose-600" />
-                  <strong className="text-rose-800 text-sm">📄 PDF 저장 시 꼭 확인하세요!</strong>
-                </div>
-                <div className="text-xs text-stone-700 space-y-1.5 ml-1">
-                  <div>
-                    <strong className="text-rose-700">1.</strong> [PDF 저장] 버튼 클릭
-                  </div>
-                  <div>
-                    <strong className="text-rose-700">2.</strong> 인쇄 대화상자에서{' '}
-                    <strong>대상(프린터)을 "PDF로 저장"</strong>으로 변경
-                  </div>
-                  <div className="bg-yellow-50 border border-yellow-300 rounded px-2 py-1.5 my-1">
-                    <strong className="text-yellow-800">3. ⚠️ 중요!</strong>{' '}
-                    <strong>"머리글과 바닥글" 체크 해제</strong> (옵션 영역 확인) →{' '}
-                    체크되어 있으면 시험지가 잘립니다!
-                  </div>
-                  <div>
-                    <strong className="text-rose-700">4.</strong> [저장] 클릭. 파일명:{' '}
-                    <code className="bg-white px-1.5 py-0.5 rounded text-rose-700 font-mono text-[11px]">
-                      VOCATEST_{sanitizeForFilename(className) || '단원명'}_
-                      {sanitizeForFilename(testTitle) || '범위'}
-                      {showAnswers ? '_정답' : ''}
-                    </code>
-                  </div>
-                </div>
-              </div>
               {/* 줌 적용 래퍼 */}
               <div
                 style={{
@@ -991,10 +985,14 @@ function TestPaper({
               </div>
             </div>
 
-            {/* 문항 영역 - 2단 × 20행 = 40문항 (flex로 가용 공간 채움) */}
+            {/* 문항 영역 - 2단 × 20행 = 40문항, 페이지를 꽉 채우도록 균등 분배 */}
             <div
-              className="test-items-grid grid grid-cols-2 gap-x-6 gap-y-0"
-              style={{ flex: '1 1 auto', alignContent: 'start' }}
+              className="test-items-grid grid grid-cols-2 gap-x-6"
+              style={{
+                flex: '1 1 auto',
+                gridAutoRows: '1fr', // 모든 행을 동일한 높이로
+                alignContent: 'stretch',
+              }}
             >
               {pageItems.map((item, i) => {
                 const question = isEngKor ? item.eng : item.kor;
@@ -1004,12 +1002,15 @@ function TestPaper({
                   <div
                     key={i}
                     className="test-item flex items-baseline gap-1.5"
-                    style={{ paddingTop: '4px', paddingBottom: '4px' }}
+                    style={{
+                      paddingTop: '6px',
+                      paddingBottom: '6px',
+                    }}
                   >
                     <span className="font-bold text-stone-700 w-6 text-right text-[12px] flex-shrink-0">
                       {num}.
                     </span>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 flex flex-col justify-center h-full">
                       <div className="font-medium text-stone-900 text-[12px] leading-tight truncate">
                         {question}
                       </div>
@@ -1027,13 +1028,9 @@ function TestPaper({
               })}
             </div>
 
-            {/* 페이지 푸터 - 컴팩트 */}
-            <div className="mt-3 pt-1 border-t border-stone-200 text-[8px] text-stone-400 flex justify-between">
-              <span>GIANTS 어휘 출제기</span>
-              <span>
-                {pageIdx + 1} / {pages.length} ·{' '}
-                {test.createdAt.toLocaleDateString('ko-KR')}
-              </span>
+            {/* 페이지 푸터 - 페이지 번호만 */}
+            <div className="mt-2 text-[9px] text-stone-400 text-center">
+              {pageIdx + 1} / {pages.length}
             </div>
           </div>
         );
