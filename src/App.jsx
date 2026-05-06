@@ -966,7 +966,7 @@ function TestPaper({
 
   return (
     <div
-      className={isPrint ? '' : 'mx-auto max-w-3xl space-y-6'}
+      className={isPrint ? '' : 'mx-auto space-y-6'}
       style={{ fontFamily: "'Noto Sans KR', sans-serif" }}
     >
       {pages.map((pageItems, pageIdx) => {
@@ -991,14 +991,18 @@ function TestPaper({
                     flexDirection: 'column',
                   }
                 : {
-                    width: '19.8cm',
-                    height: '28.0cm',
-                    maxHeight: '28.0cm',
+                    // 미리보기: A4 전체 크기(21cm × 29.7cm) + @page margin과 동일한 padding
+                    // 이렇게 해야 인쇄/PDF와 미리보기 결과가 동일하게 보임
+                    width: '21cm',
+                    height: '29.7cm',
+                    maxHeight: '29.7cm',
                     overflow: 'hidden',
-                    padding: '0',
+                    padding: '0.7cm 0.6cm',
                     boxSizing: 'border-box',
                     display: 'flex',
                     flexDirection: 'column',
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
                   }),
             }}
           >
