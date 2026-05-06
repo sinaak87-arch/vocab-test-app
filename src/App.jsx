@@ -156,7 +156,7 @@ export default function App() {
 
         setWords(parsed);
         setUnits(uniqueUnits);
-        setSelectedUnits(new Set(uniqueUnits));
+        setSelectedUnits(new Set()); // 기본값: 선택 없음 (사용자가 직접 선택)
         setGeneratedTest(null);
       } catch (err) {
         setErrorMsg('파일을 읽는 중 오류가 발생했습니다: ' + err.message);
@@ -453,12 +453,20 @@ export default function App() {
             <div className="p-6 grid md:grid-cols-2 gap-6">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-sm font-bold text-stone-700">
-                    📚 시험 범위
-                  </label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="text-sm font-bold text-stone-700">
+                      📚 시험 범위
+                    </label>
+                    <span className="text-[11px] text-stone-500 flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 bg-violet-600 rounded-sm"></span>
+                      선택됨
+                      <span className="inline-block w-3 h-3 bg-white border border-stone-300 rounded-sm ml-1.5"></span>
+                      미선택 · 클릭해서 선택하세요
+                    </span>
+                  </div>
                   <button
                     onClick={toggleAllUnits}
-                    className="text-xs text-violet-600 hover:text-violet-800 font-medium"
+                    className="text-xs text-violet-600 hover:text-violet-800 font-medium whitespace-nowrap"
                   >
                     {selectedUnits.size === units.length ? '전체 해제' : '전체 선택'}
                   </button>
