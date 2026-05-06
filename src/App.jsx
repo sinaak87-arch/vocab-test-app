@@ -12,14 +12,22 @@ import {
   AlertCircle,
   Sparkles,
   Layers,
+  Download,
 } from 'lucide-react';
 
-const STORAGE_KEY = 'vocab_test_maker_v3';
+const STORAGE_KEY = 'vocab_test_maker_v4';
+const ACADEMY_NAME = 'Giants English';
 
 // 파일명에서 확장자 제거
 function getFileBaseName(filename) {
   if (!filename) return '';
   return filename.replace(/\.(xlsx|xls|csv)$/i, '').trim();
+}
+
+// 파일명/PDF에 쓸 수 없는 문자 제거 (Windows/Mac 모두 안전)
+function sanitizeForFilename(s) {
+  if (!s) return '';
+  return String(s).replace(/[\\/:*?"<>|]/g, '_').trim();
 }
 
 // 단원 배열을 정렬 (숫자 우선, 없으면 문자열 비교)
@@ -54,7 +62,6 @@ export default function App() {
   const [testType, setTestType] = useState('eng-kor');
   const [generatedTest, setGeneratedTest] = useState(null);
   const [showAnswers, setShowAnswers] = useState(false);
-  const [academyName, setAcademyName] = useState('');
   const [className, setClassName] = useState('');
   const [studentName, setStudentName] = useState('');
   const [testTitle, setTestTitle] = useState('');
@@ -66,23 +73,6 @@ export default function App() {
   const [testTitleTouched, setTestTitleTouched] = useState(false);
 
   const fileInputRef = useRef(null);
-
-  // 학원/클래스 정보 자동 저장/복원 (학원명만 영구 저장)
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const data = JSON.parse(saved);
-        if (data.academyName) setAcademyName(data.academyName);
-      }
-    } catch (e) {}
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ academyName }));
-    } catch (e) {}
-  }, [academyName]);
 
   // 선택된 단원이 바뀔 때마다 시험지명 자동 업데이트 (사용자가 수정 안 한 경우만)
   useEffect(() => {
@@ -222,6 +212,26 @@ export default function App() {
   };
 
   const handlePrint = () => window.print();
+
+  // PDF 저장: 브라우저 인쇄 대화상자에서 "PDF로 저장" 선택
+  // 파일명을 임시로 변경해서 PDF 저장 시 기본 파일명이 되도록 함
+  const handleSaveAsPDF = () => {
+    if (!generatedTest) return;
+    const cls = sanitizeForFilename(className) || 'class';
+    const range = sanitizeForFilename(testTitle) || 'range';
+    const suffix = showAnswers ? '_정답' : '';
+    const newTitle = `VOCATEST_${cls}_${range}${suffix}`;
+    const originalTitle = document.title;
+    document.title = newTitle;
+    // 인쇄 대화상자가 닫힌 후 원래 타이틀 복원
+    const restore = () => {
+      document.title = originalTitle;
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+    // 살짝 지연을 두고 호출하면 일부 브라우저에서 더 안정적
+    setTimeout(() => window.print(), 50);
+  };
 
   const selectedRangeLabel = useMemo(() => {
     if (selectedUnits.size === 0) return '범위 미선택';
@@ -540,23 +550,21 @@ export default function App() {
                   📝 시험지 정보
                 </label>
                 <span className="text-[11px] text-stone-500">
-                  ✨ 클래스명 = 파일명, 시험지명 = 단원 범위 자동 입력
+                  ✨ 단원명 = 파일명, 범위 = 단원범위 자동 입력
                 </span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div>
-                  <label className="text-[10px] text-stone-500 block mb-1">학원명</label>
-                  <input
-                    type="text"
-                    value={academyName}
-                    onChange={(e) => setAcademyName(e.target.value)}
-                    placeholder="학원명"
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
-                  />
-                </div>
+
+              {/* 학원명 고정 표시 */}
+              <div className="mb-3 flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+                <span className="text-[10px] text-violet-700 font-bold">학원명</span>
+                <span className="text-sm font-bold text-violet-900">{ACADEMY_NAME}</span>
+                <span className="text-[10px] text-violet-500 ml-auto">고정</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="text-[10px] text-stone-500 block mb-1">
-                    클래스명{' '}
+                    단원명{' '}
                     {!classNameTouched && className && (
                       <span className="text-violet-600">· 자동</span>
                     )}
@@ -568,13 +576,13 @@ export default function App() {
                       setClassName(e.target.value);
                       setClassNameTouched(true);
                     }}
-                    placeholder="클래스명"
+                    placeholder="단원명"
                     className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
                   />
                 </div>
                 <div>
                   <label className="text-[10px] text-stone-500 block mb-1">
-                    시험지명{' '}
+                    범위{' '}
                     {!testTitleTouched && testTitle && (
                       <span className="text-violet-600">· 자동</span>
                     )}
@@ -586,7 +594,7 @@ export default function App() {
                       setTestTitle(e.target.value);
                       setTestTitleTouched(true);
                     }}
-                    placeholder="시험지명"
+                    placeholder="범위"
                     className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
                   />
                 </div>
@@ -641,6 +649,13 @@ export default function App() {
                   <Shuffle className="w-4 h-4" /> 순서 섞기
                 </button>
                 <button
+                  onClick={handleSaveAsPDF}
+                  className="px-4 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold flex items-center gap-1.5"
+                  title="인쇄 대화상자에서 [PDF로 저장]을 선택해주세요"
+                >
+                  <Download className="w-4 h-4" /> PDF 저장
+                </button>
+                <button
                   onClick={handlePrint}
                   className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold flex items-center gap-1.5"
                 >
@@ -650,10 +665,21 @@ export default function App() {
             </div>
 
             <div className="p-6 bg-stone-100">
+              <div className="max-w-3xl mx-auto mb-3 text-xs text-stone-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2.5 flex items-start gap-2">
+                <Download className="w-4 h-4 text-rose-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <strong className="text-rose-700">PDF 저장 안내:</strong> [PDF 저장] 클릭 → 인쇄 대화상자에서 <strong>대상(프린터)을 "PDF로 저장"</strong>으로 변경 → 저장. 파일명은{' '}
+                  <code className="bg-white px-1.5 py-0.5 rounded text-rose-700 font-mono">
+                    VOCATEST_{sanitizeForFilename(className) || '단원명'}_{sanitizeForFilename(testTitle) || '범위'}
+                    {showAnswers ? '_정답' : ''}
+                  </code>{' '}
+                  으로 자동 입력됩니다.
+                </div>
+              </div>
               <TestPaper
                 test={generatedTest}
                 showAnswers={showAnswers}
-                academyName={academyName}
+                academyName={ACADEMY_NAME}
                 className={className}
                 studentName={studentName}
                 testTitle={testTitle}
@@ -678,7 +704,7 @@ export default function App() {
           <TestPaper
             test={generatedTest}
             showAnswers={showAnswers}
-            academyName={academyName}
+            academyName={ACADEMY_NAME}
             className={className}
             studentName={studentName}
             testTitle={testTitle}
@@ -735,7 +761,7 @@ function TestPaper({
             )}
             {className && (
               <div className="pb-1 border-b border-stone-200 mb-1">
-                <span className="text-stone-500 mr-1.5">클래스</span>
+                <span className="text-stone-500 mr-1.5">단원</span>
                 {className}
               </div>
             )}
