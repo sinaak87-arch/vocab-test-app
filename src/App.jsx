@@ -239,6 +239,26 @@ export default function App() {
   // 파일명을 임시로 변경해서 PDF 저장 시 기본 파일명이 되도록 함
   const handleSaveAsPDF = () => {
     if (!generatedTest) return;
+
+    // 첫 사용 시 머리글/바닥글 해제 안내
+    const SHOWN_KEY = 'vocab_pdf_guide_shown';
+    const shown = localStorage.getItem(SHOWN_KEY);
+    if (!shown) {
+      const proceed = window.confirm(
+        '📄 PDF 저장 시 꼭 확인하세요!\n\n' +
+        '인쇄 대화상자가 열리면 다음을 꼭 설정하세요:\n\n' +
+        '1. 대상(프린터): "PDF로 저장" 선택\n' +
+        '2. ⚠️ "추가 설정" 또는 "옵션" 펼치기\n' +
+        '3. ⚠️ "머리글과 바닥글" 체크 해제 (필수!)\n' +
+        '4. [저장] 클릭\n\n' +
+        '※ 머리글/바닥글이 켜져있으면 시험지가 잘립니다.\n' +
+        '※ 한 번 설정하면 다음부터는 자동으로 기억됩니다.\n\n' +
+        '준비되면 [확인]을 눌러주세요.'
+      );
+      if (!proceed) return;
+      localStorage.setItem(SHOWN_KEY, '1');
+    }
+
     const cls = sanitizeForFilename(className) || 'class';
     const range = sanitizeForFilename(testTitle) || 'range';
     const suffix = showAnswers ? '_정답' : '';
@@ -272,37 +292,57 @@ export default function App() {
             background: white !important;
             margin: 0 !important;
             padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .no-print { display: none !important; }
           .print-only { display: block !important; }
           @page {
-            margin: 0.8cm;
+            margin: 0.5cm;
             size: A4 portrait;
           }
+          /* 인쇄 시 시험지 페이지를 정확한 A4 사용 영역에 강제 고정 */
           .print-page {
             box-shadow: none !important;
             border: none !important;
-            padding: 0 !important;
             margin: 0 !important;
+            padding: 0 !important;
             width: 100% !important;
+            height: 27.7cm !important;
+            max-height: 27.7cm !important;
             box-sizing: border-box !important;
+            overflow: hidden !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
             page-break-after: always !important;
             break-after: page !important;
+            display: flex !important;
+            flex-direction: column !important;
           }
           .print-page:last-child {
             page-break-after: auto !important;
             break-after: auto !important;
           }
-          .test-items-grid,
+          .test-items-grid {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            flex: 1 1 auto !important;
+          }
           .test-item {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
+          /* 인쇄 시 문항 영역 매우 컴팩트 */
+          .print-page .test-item {
+            padding-top: 1px !important;
+            padding-bottom: 1px !important;
+          }
+          .print-page .test-line {
+            min-height: 0.85rem !important;
+          }
         }
         .print-only { display: none; }
-        .test-line { border-bottom: 1px solid #1c1917; min-height: 1.3rem; }
+        .test-line { border-bottom: 1px solid #1c1917; min-height: 1.1rem; }
       `}</style>
 
       <header className="no-print bg-gradient-to-r from-violet-700 via-purple-700 to-fuchsia-700 text-white">
@@ -759,15 +799,32 @@ export default function App() {
             </div>
 
             <div className="p-6 bg-stone-100">
-              <div className="max-w-3xl mx-auto mb-3 text-xs text-stone-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2.5 flex items-start gap-2">
-                <Download className="w-4 h-4 text-rose-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <strong className="text-rose-700">PDF 저장 안내:</strong> [PDF 저장] 클릭 → 인쇄 대화상자에서 <strong>대상(프린터)을 "PDF로 저장"</strong>으로 변경 → 저장. 파일명은{' '}
-                  <code className="bg-white px-1.5 py-0.5 rounded text-rose-700 font-mono">
-                    VOCATEST_{sanitizeForFilename(className) || '단원명'}_{sanitizeForFilename(testTitle) || '범위'}
-                    {showAnswers ? '_정답' : ''}
-                  </code>{' '}
-                  으로 자동 입력됩니다.
+              <div className="max-w-3xl mx-auto mb-3 bg-rose-50 border-2 border-rose-300 rounded-lg px-4 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Download className="w-5 h-5 text-rose-600" />
+                  <strong className="text-rose-800 text-sm">📄 PDF 저장 시 꼭 확인하세요!</strong>
+                </div>
+                <div className="text-xs text-stone-700 space-y-1.5 ml-1">
+                  <div>
+                    <strong className="text-rose-700">1.</strong> [PDF 저장] 버튼 클릭
+                  </div>
+                  <div>
+                    <strong className="text-rose-700">2.</strong> 인쇄 대화상자에서{' '}
+                    <strong>대상(프린터)을 "PDF로 저장"</strong>으로 변경
+                  </div>
+                  <div className="bg-yellow-50 border border-yellow-300 rounded px-2 py-1.5 my-1">
+                    <strong className="text-yellow-800">3. ⚠️ 중요!</strong>{' '}
+                    <strong>"머리글과 바닥글" 체크 해제</strong> (옵션 영역 확인) →{' '}
+                    체크되어 있으면 시험지가 잘립니다!
+                  </div>
+                  <div>
+                    <strong className="text-rose-700">4.</strong> [저장] 클릭. 파일명:{' '}
+                    <code className="bg-white px-1.5 py-0.5 rounded text-rose-700 font-mono text-[11px]">
+                      VOCATEST_{sanitizeForFilename(className) || '단원명'}_
+                      {sanitizeForFilename(testTitle) || '범위'}
+                      {showAnswers ? '_정답' : ''}
+                    </code>
+                  </div>
                 </div>
               </div>
               {/* 줌 적용 래퍼 */}
@@ -856,17 +913,25 @@ function TestPaper({
               isPrint ? '' : 'shadow-lg rounded-lg'
             }`}
             style={{
-              padding: isPrint ? '0' : '2rem',
-              // A4 사이즈: 21cm × 29.7cm, 여백 0.8cm씩 적용 시 사용 가능 영역
-              // 미리보기에서는 A4 비율을 보여주고, 인쇄는 CSS @page가 처리
+              // A4 = 21cm × 29.7cm, @page margin 0.5cm 적용 시 사용 영역 = 20cm × 28.7cm
+              // 미리보기와 인쇄 모두 동일한 영역 사용 (페이지 내부 패딩 0.5cm 추가)
               ...(isPrint
-                ? { width: '100%', boxSizing: 'border-box' }
+                ? {
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }
                 : {
-                    width: '19.4cm',
-                    minHeight: '28.1cm',
-                    maxHeight: '28.1cm',
+                    width: '20cm',
+                    height: '28.7cm',
+                    maxHeight: '28.7cm',
                     overflow: 'hidden',
-                    padding: '0.8cm',
+                    padding: '0.5cm',
+                    boxSizing: 'border-box',
+                    display: 'flex',
+                    flexDirection: 'column',
                   }),
             }}
           >
@@ -926,8 +991,11 @@ function TestPaper({
               </div>
             </div>
 
-            {/* 문항 영역 - 2단 × 20행 = 40문항 */}
-            <div className="test-items-grid grid grid-cols-2 gap-x-6 gap-y-0">
+            {/* 문항 영역 - 2단 × 20행 = 40문항 (flex로 가용 공간 채움) */}
+            <div
+              className="test-items-grid grid grid-cols-2 gap-x-6 gap-y-0"
+              style={{ flex: '1 1 auto', alignContent: 'start' }}
+            >
               {pageItems.map((item, i) => {
                 const question = isEngKor ? item.eng : item.kor;
                 const answer = isEngKor ? item.kor : item.eng;
