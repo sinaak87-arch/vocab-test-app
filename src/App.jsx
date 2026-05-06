@@ -454,7 +454,7 @@ export default function App() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-sm font-bold text-stone-700">
-                    📚 시험 범위 (단원)
+                    📚 시험 범위
                   </label>
                   <button
                     onClick={toggleAllUnits}
@@ -464,7 +464,7 @@ export default function App() {
                   </button>
                 </div>
                 <div className="border border-stone-200 rounded-xl p-3 max-h-60 overflow-y-auto bg-stone-50/50">
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-5 gap-2">
                     {units.map((unit) => {
                       const checked = selectedUnits.has(unit);
                       const cnt = unitCounts[unit];
@@ -472,14 +472,14 @@ export default function App() {
                         <button
                           key={unit}
                           onClick={() => toggleUnit(unit)}
-                          className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                          className={`px-2 py-2 rounded-lg border text-sm font-medium transition-all ${
                             checked
                               ? 'bg-violet-600 border-violet-600 text-white shadow-sm'
                               : 'bg-white border-stone-200 text-stone-700 hover:border-violet-300'
                           }`}
                         >
-                          <div className="flex items-center justify-between gap-1.5">
-                            <span>단원 {unit}</span>
+                          <div className="flex items-center justify-between gap-1">
+                            <span>{unit}</span>
                             <span
                               className={`text-[10px] ${
                                 checked ? 'text-violet-100' : 'text-stone-400'
@@ -589,7 +589,7 @@ export default function App() {
                   📝 시험지 정보
                 </label>
                 <span className="text-[11px] text-stone-500">
-                  ✨ 단원명 = 파일명, 범위 = 단원범위 자동 입력
+                  ✨ 단원명 = 파일명, 범위 = 시험 범위에서 자동 적용
                 </span>
               </div>
 
@@ -600,7 +600,7 @@ export default function App() {
                 <span className="text-[10px] text-violet-500 ml-auto">고정</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] text-stone-500 block mb-1">
                     단원명{' '}
@@ -616,24 +616,6 @@ export default function App() {
                       setClassNameTouched(true);
                     }}
                     placeholder="단원명"
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-stone-500 block mb-1">
-                    범위{' '}
-                    {!testTitleTouched && testTitle && (
-                      <span className="text-violet-600">· 자동</span>
-                    )}
-                  </label>
-                  <input
-                    type="text"
-                    value={testTitle}
-                    onChange={(e) => {
-                      setTestTitle(e.target.value);
-                      setTestTitleTouched(true);
-                    }}
-                    placeholder="범위"
                     className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:border-violet-400"
                   />
                 </div>
