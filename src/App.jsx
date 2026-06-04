@@ -361,20 +361,19 @@ export default function App() {
           .no-print { display: none !important; }
           .print-only { display: block !important; }
           @page {
-            margin: 0.7cm 0.6cm;
+            margin: 1cm 0.7cm;
             size: A4 portrait;
           }
-          /* 인쇄 시 시험지 페이지를 A4 사용 영역에 안전하게 고정
-             A4 = 21cm × 29.7cm, @page margin 0.7cm/0.6cm = 사용 영역 19.8cm × 28.3cm
-             높이는 28.0cm로 살짝 여유를 둬서 빈 페이지가 추가되지 않도록 함 */
+          /* 인쇄 시 시험지 페이지를 정확한 A4 사용 영역에 강제 고정
+             A4 = 21cm × 29.7cm, @page margin 1cm/0.7cm = 사용 영역 19.6cm × 27.7cm */
           .print-page {
             box-shadow: none !important;
             border: none !important;
             margin: 0 !important;
             padding: 0 !important;
             width: 100% !important;
-            height: 28.0cm !important;
-            max-height: 28.0cm !important;
+            height: 27.7cm !important;
+            max-height: 27.7cm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             page-break-inside: avoid !important;
@@ -397,16 +396,18 @@ export default function App() {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
-          /* 인쇄 시 문항 영역이 페이지를 꽉 채우도록 grid 1fr이 작동하게 함 */
+          /* 인쇄 시 문항 영역: 항상 40문항(20행) 기준의 고정 행 높이로 배치하고
+             위에서부터 채운다. 40개 미만(예: 마지막 20개) 페이지는 아래쪽이
+             자동으로 여백으로 남는다. */
           .print-page .test-items-grid {
             flex: 1 1 auto !important;
-            grid-auto-rows: 1fr !important;
-            align-content: stretch !important;
+            grid-auto-rows: calc((27.7cm - 3.2cm) / 20) !important;
+            align-content: start !important;
           }
-          /* 인쇄 시 각 문항 패딩을 줄여 40개가 안전하게 한 페이지에 들어가도록 */
+          /* 인쇄 시 각 문항 패딩을 살짝 줄여 안전하게 40개 들어가도록 */
           .print-page .test-item {
-            padding-top: 2px !important;
-            padding-bottom: 2px !important;
+            padding-top: 3px !important;
+            padding-bottom: 3px !important;
           }
         }
         .print-only { display: none; }
@@ -966,7 +967,7 @@ function TestPaper({
 
   return (
     <div
-      className={isPrint ? '' : 'mx-auto space-y-6'}
+      className={isPrint ? '' : 'mx-auto max-w-3xl space-y-6'}
       style={{ fontFamily: "'Noto Sans KR', sans-serif" }}
     >
       {pages.map((pageItems, pageIdx) => {
@@ -991,18 +992,14 @@ function TestPaper({
                     flexDirection: 'column',
                   }
                 : {
-                    // 미리보기: A4 전체 크기(21cm × 29.7cm) + @page margin과 동일한 padding
-                    // 이렇게 해야 인쇄/PDF와 미리보기 결과가 동일하게 보임
-                    width: '21cm',
-                    height: '29.7cm',
-                    maxHeight: '29.7cm',
+                    width: '19.6cm',
+                    height: '27.7cm',
+                    maxHeight: '27.7cm',
                     overflow: 'hidden',
-                    padding: '0.7cm 0.6cm',
+                    padding: '0',
                     boxSizing: 'border-box',
                     display: 'flex',
                     flexDirection: 'column',
-                    marginLeft: 'auto',
-                    marginRight: 'auto',
                   }),
             }}
           >
@@ -1067,8 +1064,8 @@ function TestPaper({
               className="test-items-grid grid grid-cols-2 gap-x-6"
               style={{
                 flex: '1 1 auto',
-                gridAutoRows: '1fr', // 모든 행을 동일한 높이로
-                alignContent: 'stretch',
+                gridAutoRows: 'calc((27.7cm - 3.2cm) / 20)', // 40문항(20행) 기준 고정 행 높이
+                alignContent: 'start', // 위에서부터 채우고 나머지는 여백으로
               }}
             >
               {pageItems.map((item, i) => {
@@ -1080,8 +1077,8 @@ function TestPaper({
                     key={i}
                     className="test-item flex items-baseline gap-1.5"
                     style={{
-                      paddingTop: '4px',
-                      paddingBottom: '4px',
+                      paddingTop: '6px',
+                      paddingBottom: '6px',
                     }}
                   >
                     <span className="font-bold text-stone-700 w-6 text-right text-[12px] flex-shrink-0">
