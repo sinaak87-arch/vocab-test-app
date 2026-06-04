@@ -993,9 +993,8 @@ function TestPaper({
                   }
                 : {
                     width: '19.6cm',
-                    height: '27.7cm',
-                    maxHeight: '27.7cm',
-                    overflow: 'hidden',
+                    minHeight: '27.7cm',
+                    overflow: 'visible',
                     padding: '0',
                     boxSizing: 'border-box',
                     display: 'flex',
@@ -1110,5 +1109,3 @@ function TestPaper({
         );
       })}
     </div>
-  );
-}
